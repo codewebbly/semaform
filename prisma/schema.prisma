@@ -1,0 +1,118 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DONOR
+  NONPROFIT
+  ADMIN
+}
+
+enum SourceType {
+  MANUAL
+  IMPORTED
+}
+
+enum ApplicationStatus {
+  SUBMITTED
+  UNDER_REVIEW
+  SHORTLISTED
+  APPROVED
+  REJECTED
+  FUNDED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  suspended    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  donorProfile     DonorProfile?
+  nonprofitProfile NonprofitProfile?
+}
+
+model DonorProfile {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  orgName           String
+  mission           String
+  focusAreas        String[]
+  geographies       String[]
+  annualBudgetRange String
+
+  user User  @relation(fields: [userId], references: [id])
+  rfps RFP[]
+}
+
+model NonprofitProfile {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  orgName      String
+  mission      String
+  focusAreas   String[]
+  serviceAreas String[]
+  annualBudget String
+  sdgAlignment String[]
+
+  user         User          @relation(fields: [userId], references: [id])
+  applications Application[]
+  matchScores  MatchScore[]
+}
+
+model RFP {
+  id                  String     @id @default(cuid())
+  donorId             String?    // null for admin-imported external RFPs
+  title               String
+  description         String
+  fundingAmount       Float
+  deadline            DateTime
+  focusAreas          String[]
+  geographies         String[]
+  eligibilityCriteria String
+  sourceType          SourceType @default(MANUAL)
+  published           Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+
+  donor        DonorProfile?  @relation(fields: [donorId], references: [id])
+  applications Application[]
+  matchScores  MatchScore[]
+}
+
+model Application {
+  id                String            @id @default(cuid())
+  rfpId             String
+  nonprofitId       String
+  status            ApplicationStatus @default(SUBMITTED)
+  proposalNarrative String
+  budgetNotes       String
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  rfp       RFP              @relation(fields: [rfpId], references: [id])
+  nonprofit NonprofitProfile @relation(fields: [nonprofitId], references: [id])
+
+  @@unique([rfpId, nonprofitId])
+}
+
+model MatchScore {
+  id            String   @id @default(cuid())
+  rfpId         String
+  nonprofitId   String
+  score         Int
+  justification String
+  computedAt    DateTime @default(now())
+
+  rfp       RFP              @relation(fields: [rfpId], references: [id])
+  nonprofit NonprofitProfile @relation(fields: [nonprofitId], references: [id])
+
+  @@unique([rfpId, nonprofitId])
+}
